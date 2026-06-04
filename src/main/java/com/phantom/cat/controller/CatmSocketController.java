@@ -30,9 +30,19 @@ public class CatmSocketController {
         return message;
     }
 
-    @MessageMapping("/typing")
-    @SendTo("/topic/typing")
-    public Catm typing(Catm message) {
-        return message;
-    }
+   @MessageMapping("/typing")
+@SendTo("/topic/typing")
+public Catm typing(Catm message) {
+
+    System.out.println(
+        "Typing Event => "
+        + message.getFrom()
+        + " -> "
+        + message.getTo()
+        + " : "
+        + message.isTyping()
+    );
+
+    return message;
+}
 }
