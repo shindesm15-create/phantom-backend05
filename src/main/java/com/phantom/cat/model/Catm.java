@@ -6,10 +6,17 @@ public class Catm {
     private String to;
     private String content;
     private String reply;
+
     private boolean temp;
+    private boolean isTyping;
+
     private long seenTime;
     private long timestamp;
+
     private String status;
+
+    public Catm() {
+    }
 
     public String getFrom() {
         return from;
@@ -49,6 +56,14 @@ public class Catm {
 
     public void setTemp(boolean temp) {
         this.temp = temp;
+    }
+
+    public boolean isTyping() {
+        return isTyping;
+    }
+
+    public void setTyping(boolean typing) {
+        this.isTyping = typing;
     }
 
     public long getSeenTime() {
