@@ -85,19 +85,21 @@ public class CatmService {
 
     // ================= SEND MESSAGE =================
 
-    public String sendMessage(String from, String to, String content) {
+   public String sendMessage(String from, String to, String content) {
 
-    if(from == null || to == null || content == null){
+    if (from == null || to == null || content == null) {
         return "Invalid message";
     }
 
     Catm msg = new Catm();
+
     msg.setFrom(from);
     msg.setTo(to);
     msg.setContent(content);
 
     msg.setStatus("sent");
-    msg.setTemp(true);          // FIX: make it temporary if needed
+    msg.setTemp(true); // true = auto delete after 24h
+    msg.setTimestamp(System.currentTimeMillis());
     msg.setSeenTime(0);
 
     catmRepo.save(msg);
@@ -105,24 +107,20 @@ public class CatmService {
     return "sent";
 }
 
-
     public void seenCatm(String from, String to) {
 
     List<Catm> all = catmRepo.findAll();
 
-    for(Catm m : all) {
+    for (Catm m : all) {
 
         boolean match =
                 m.getFrom().equals(from) &&
                 m.getTo().equals(to);
 
-        if(match) {
+        if (match) {
 
             m.setStatus("seen");
-
-            if(m.isTemp()){
-                m.setSeenTime(System.currentTimeMillis()); 
-            }
+            m.setSeenTime(System.currentTimeMillis());
 
             catmRepo.save(m);
         }
@@ -131,61 +129,41 @@ public class CatmService {
 
     // ================= GET CHAT =================
 
-    public List<Catm> getMessages(
-            String user1,
-            String user2){
+   public List<Catm> getMessages(String user1, String user2) {
 
-        List<Catm> all =
-                catmRepo.findAll();
+    List<Catm> all = catmRepo.findAll();
+    List<Catm> result = new ArrayList<>();
 
-        List<Catm> result =
-                new ArrayList<>();
+    long now = System.currentTimeMillis();
+    long twentyFourHours = 24 * 60 * 60 * 1000;
 
-        for(Catm m : all){
+    for (Catm m : all) {
 
-            boolean match =
+        // Delete temporary messages older than 24h
+        if (m.isTemp()) {
 
-                    (m.getFrom().equals(user1)
-                    &&
-                    m.getTo().equals(user2))
+            long age = now - m.getTimestamp();
 
-                    ||
-
-                    (m.getFrom().equals(user2)
-                    &&
-                    m.getTo().equals(user1));
-
-            if(match){
-                result.add(m);
+            if (age >= twentyFourHours) {
+                catmRepo.delete(m);
+                continue;
             }
         }
-        for(Catm m : all){
 
-    // 🔥 AUTO DELETE AFTER 24 HOURS
-    if(m.isTemp() && m.getSeenTime() > 0){
+        boolean match =
+                (m.getFrom().equals(user1) &&
+                 m.getTo().equals(user2))
+                ||
+                (m.getFrom().equals(user2) &&
+                 m.getTo().equals(user1));
 
-        long diff = System.currentTimeMillis() - m.getSeenTime();
-        long hours = diff / (1000 * 60 * 60);
-
-        if(hours >= 24){
-            catmRepo.delete(m);
-            continue;
+        if (match) {
+            result.add(m);
         }
     }
 
-    boolean match =
-            (m.getFrom().equals(user1) && m.getTo().equals(user2))
-            ||
-            (m.getFrom().equals(user2) && m.getTo().equals(user1));
-
-    if(match){
-        result.add(m);
-    }
+    return result;
 }
-
-        return result;
-    }
-
     // ================= ALL USERS =================
 
     public List<String> getAllUsers(){
