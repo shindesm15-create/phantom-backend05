@@ -35,11 +35,6 @@ public class CatmController {
         service.seenCatm(from, to);
     }
 
-    // IMAGE UPLOAD
-   @PostMapping("/upload")
-public String uploadImage(@RequestParam("file") MultipartFile file)
-        throws IOException {
-
-    return service.uploadImage(file);
+    ;
 }
 }
