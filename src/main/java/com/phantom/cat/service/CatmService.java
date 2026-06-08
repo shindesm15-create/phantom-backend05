@@ -124,6 +124,17 @@ public String sendMessage(
     return "sent";
 }
 
+
+        catmRepo.save(msg);
+
+System.out.println(
+    "MESSAGE SAVED => "
+    + from + " -> "
+    + to + " | "
+    + messageType
+);
+
+        
 // ================= MARK AS SEEN =================
 
 public void seenCatm(String from, String to) {
@@ -149,51 +160,41 @@ public void seenCatm(String from, String to) {
 // ================= GET CHAT =================
 
 public List<Catm> getMessages(
-String user1,
-String user2) {
+        String user1,
+        String user2) {
 
-List<Catm> all = catmRepo.findAll();
-List<Catm> result = new ArrayList<>();
+    List<Catm> all =
+            catmRepo.findConversation(
+                    user1,
+                    user2
+            );
 
-long now = System.currentTimeMillis();
-long twentyFourHours = 24L * 60 * 60 * 1000;
+    long now = System.currentTimeMillis();
+    long twentyFourHours = 24L * 60 * 60 * 1000;
 
-for (Catm m : all) {
+    List<Catm> result = new ArrayList<>();
 
-    // Auto delete temp messages after 24h
-    if (m.isTemp()) {
+    for (Catm m : all) {
 
-        long age = now - m.getTimestamp();
+        if (m.isTemp()) {
 
-        if (age >= twentyFourHours) {
-            catmRepo.delete(m);
-            continue;
+            long age = now - m.getTimestamp();
+
+            if (age >= twentyFourHours) {
+                catmRepo.delete(m);
+                continue;
+            }
         }
-    }
 
-    // Check conversation match
-    boolean match =
-            (m.getFrom().equals(user1)
-                    && m.getTo().equals(user2))
-            ||
-            (m.getFrom().equals(user2)
-                    && m.getTo().equals(user1));
-
-    if (match) {
-
-        // Default type for old messages
         if (m.getMessageType() == null) {
             m.setMessageType("TEXT");
         }
 
         result.add(m);
     }
+
+    return result;
 }
-
-return result;
-
-}
-
 
 // ================= ALL USERS =================
 
