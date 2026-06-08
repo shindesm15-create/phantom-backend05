@@ -1,180 +1,339 @@
-package com.phantom.cat.model;
+package com.phantom.cat.service;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+import com.phantom.cat.model.User;
 
-import java.util.ArrayList;
+import com.phantom.cat.model.Catm;
+
+import com.phantom.cat.repository.UserRepository;
+
+import com.phantom.cat.repository.CatmRepository;
+
+import org.springframework.stereotype.Service;
+
 import java.util.List;
 
-@Document(collection = "messages")
-public class Catm {
+import java.util.ArrayList;
 
-    @Id
-    private String id;
+@Service
 
-    private String from;
-    private String to;
+public class CatmService {
 
-    // Text message
-    private String content;
+private final UserRepository userRepo;
 
-    // Image URL
-    private String imageUrl;
+private final CatmRepository catmRepo;
 
-    // TEXT, IMAGE, VIDEO, FILE, VOICE
-    private String messageType;
 
-    // Reply message text
-    private String reply;
 
-    // Temporary message
-    private boolean temp;
+public CatmService(
 
-    // Typing indicator
-    private boolean isTyping;
+        UserRepository userRepo,
 
-    // Seen timestamp
-    private long seenTime;
+        CatmRepository catmRepo) {
 
-    // Sent timestamp
-    private long timestamp;
 
-    // SENT, DELIVERED, SEEN
-    private String status;
 
-    // Users who saved the message
-    private List<String> savedBy = new ArrayList<>();
+    this.userRepo = userRepo;
 
-    public Catm() {
+    this.catmRepo = catmRepo;
+
+}
+
+
+
+// ================= REGISTER =================
+
+
+
+public String createUser(
+
+        String name,
+
+        String password) {
+
+
+
+    if(name == null || password == null){
+
+        return "Invalid data";
+
     }
 
-    // ===== ID =====
 
-    public String getId() {
-        return id;
+
+    User exist =
+
+            userRepo.findByName(name);
+
+
+
+    if(exist != null){
+
+        return "User already exists";
+
     }
 
-    public void setId(String id) {
-        this.id = id;
+
+
+    User user = new User();
+
+
+
+    user.setName(name);
+
+    user.setPassword(password);
+
+
+
+    userRepo.save(user);
+
+
+
+    return "User created";
+
+}
+
+
+
+// ================= LOGIN =================
+
+
+
+
+
+   public String login(String name, String password) {
+
+
+
+try {
+
+
+
+    User user = userRepo.findByName(name);
+
+
+
+    if (user == null) {
+
+        return "User not found";
+
     }
 
-    // ===== FROM =====
 
-    public String getFrom() {
-        return from;
+
+    String dbPass = user.getPassword();
+
+
+
+    if (dbPass == null) {
+
+        return "Password not set in DB";
+
     }
 
-    public void setFrom(String from) {
-        this.from = from;
+
+
+    if (!dbPass.equals(password)) {
+
+        return "Wrong password";
+
     }
 
-    // ===== TO =====
 
-    public String getTo() {
-        return to;
+
+    return "success";
+
+
+
+} catch (Exception e) {
+
+    e.printStackTrace();
+
+    return "server error: " + e.getMessage();
+
+}
+
+}
+
+// ================= SEND MESSAGE =================
+
+public String sendMessage(String from, String to, String content) {
+
+if (from == null || to == null || content == null) {
+
+    return "Invalid message";
+
+}
+
+
+
+Catm msg = new Catm();
+
+
+
+msg.setFrom(from);
+
+msg.setTo(to);
+
+msg.setContent(content);
+
+
+
+msg.setStatus("sent");
+
+msg.setTemp(true); // true = auto delete after 24h
+
+msg.setTimestamp(System.currentTimeMillis());
+
+msg.setSeenTime(0);
+
+
+
+catmRepo.save(msg);
+
+
+
+return "sent";
+
+}
+
+public void seenCatm(String from, String to) {
+
+
+
+List<Catm> all = catmRepo.findAll();
+
+
+
+for (Catm m : all) {
+
+
+
+    boolean match =
+
+            m.getFrom().equals(from) &&
+
+            m.getTo().equals(to);
+
+
+
+    if (match) {
+
+
+
+        m.setStatus("seen");
+
+        m.setSeenTime(System.currentTimeMillis());
+
+
+
+        catmRepo.save(m);
+
     }
 
-    public void setTo(String to) {
-        this.to = to;
+}
+
+}
+
+// ================= GET CHAT =================
+
+public List<Catm> getMessages(String user1, String user2) {
+
+List<Catm> all = catmRepo.findAll();
+
+List<Catm> result = new ArrayList<>();
+
+
+
+long now = System.currentTimeMillis();
+
+long twentyFourHours = 24 * 60 * 60 * 1000;
+
+
+
+for (Catm m : all) {
+
+
+
+    // Delete temporary messages older than 24h
+
+    if (m.isTemp()) {
+
+
+
+        long age = now - m.getTimestamp();
+
+
+
+        if (age >= twentyFourHours) {
+
+            catmRepo.delete(m);
+
+            continue;
+
+        }
+
     }
 
-    // ===== CONTENT =====
 
-    public String getContent() {
-        return content;
+
+    boolean match =
+
+            (m.getFrom().equals(user1) &&
+
+             m.getTo().equals(user2))
+
+            ||
+
+            (m.getFrom().equals(user2) &&
+
+             m.getTo().equals(user1));
+
+
+
+    if (match) {
+
+        result.add(m);
+
     }
 
-    public void setContent(String content) {
-        this.content = content;
+}
+
+
+
+return result;
+
+}
+
+// ================= ALL USERS =================
+
+
+
+public List<String> getAllUsers(){
+
+
+
+    List<User> all =
+
+            userRepo.findAll();
+
+
+
+    List<String> names =
+
+            new ArrayList<>();
+
+
+
+    for(User u : all){
+
+        names.add(u.getName());
+
     }
 
-    // ===== IMAGE URL =====
 
-    public String getImageUrl() {
-        return imageUrl;
-    }
 
-    public void setImageUrl(String imageUrl) {
-        this.imageUrl = imageUrl;
-    }
+    return names;
 
-    // ===== MESSAGE TYPE =====
+}
 
-    public String getMessageType() {
-        return messageType;
-    }
-
-    public void setMessageType(String messageType) {
-        this.messageType = messageType;
-    }
-
-    // ===== REPLY =====
-
-    public String getReply() {
-        return reply;
-    }
-
-    public void setReply(String reply) {
-        this.reply = reply;
-    }
-
-    // ===== TEMP =====
-
-    public boolean isTemp() {
-        return temp;
-    }
-
-    public void setTemp(boolean temp) {
-        this.temp = temp;
-    }
-
-    // ===== TYPING =====
-
-    public boolean isTyping() {
-        return isTyping;
-    }
-
-    public void setTyping(boolean typing) {
-        this.isTyping = typing;
-    }
-
-    // ===== SEEN TIME =====
-
-    public long getSeenTime() {
-        return seenTime;
-    }
-
-    public void setSeenTime(long seenTime) {
-        this.seenTime = seenTime;
-    }
-
-    // ===== TIMESTAMP =====
-
-    public long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(long timestamp) {
-        this.timestamp = timestamp;
-    }
-
-    // ===== STATUS =====
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    // ===== SAVED BY =====
-
-    public List<String> getSavedBy() {
-        return savedBy;
-    }
-
-    public void setSavedBy(List<String> savedBy) {
-        this.savedBy = savedBy;
-    }
 }
