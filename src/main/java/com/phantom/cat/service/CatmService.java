@@ -6,13 +6,6 @@ import com.phantom.cat.repository.UserRepository;
 import com.phantom.cat.repository.CatmRepository;
 
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,224 +13,164 @@ import java.util.List;
 @Service
 public class CatmService {
 
-private final UserRepository userRepo;
-private final CatmRepository catmRepo;
+    private final UserRepository userRepo;
+    private final CatmRepository catmRepo;
 
-public CatmService(
-        UserRepository userRepo,
-        CatmRepository catmRepo) {
-
-    this.userRepo = userRepo;
-    this.catmRepo = catmRepo;
-}
-
-// ================= REGISTER =================
-
-public String createUser(String name, String password) {
-
-    if (name == null || password == null) {
-        return "Invalid data";
+    public CatmService(UserRepository userRepo,
+                       CatmRepository catmRepo) {
+        this.userRepo = userRepo;
+        this.catmRepo = catmRepo;
     }
 
-    User exist = userRepo.findByName(name);
+    // ================= REGISTER =================
+    public String createUser(String name, String password) {
 
-    if (exist != null) {
-        return "User already exists";
-    }
-
-    User user = new User();
-
-    user.setName(name);
-    user.setPassword(password);
-
-    userRepo.save(user);
-
-    return "User created";
-}
-
-// ================= LOGIN =================
-
-public String login(String name, String password) {
-
-    try {
-
-        User user = userRepo.findByName(name);
-
-        if (user == null) {
-            return "User not found";
+        if (name == null || password == null) {
+            return "Invalid data";
         }
 
-        String dbPass = user.getPassword();
+        User exist = userRepo.findByName(name);
 
-        if (dbPass == null) {
-            return "Password not set in DB";
+        if (exist != null) {
+            return "User already exists";
         }
 
-        if (!dbPass.equals(password)) {
-            return "Wrong password";
-        }
+        User user = new User();
+        user.setName(name);
+        user.setPassword(password);
 
-        return "success";
+        userRepo.save(user);
 
-    } catch (Exception e) {
-
-        e.printStackTrace();
-        return "server error: " + e.getMessage();
-    }
-}
-
-// ================= SEND MESSAGE =================
-
-public String sendMessage(
-        String from,
-        String to,
-        String content,
-        String imageUrl,
-        String messageType) {
-
-    if (from == null || to == null) {
-        return "Invalid message";
+        return "User created";
     }
 
-    Catm msg = new Catm();
+    // ================= LOGIN =================
+    public String login(String name, String password) {
 
-    msg.setFrom(from);
-    msg.setTo(to);
+        try {
+            User user = userRepo.findByName(name);
 
-    msg.setContent(content);
-    msg.setImageUrl(imageUrl);
+            if (user == null) {
+                return "User not found";
+            }
 
-    if (messageType == null) {
-        messageType = "TEXT";
-    }
+            String dbPass = user.getPassword();
 
-    msg.setMessageType(messageType);
+            if (dbPass == null) {
+                return "Password not set in DB";
+            }
 
-    msg.setStatus("sent");
-    msg.setTemp(true);
+            if (!dbPass.equals(password)) {
+                return "Wrong password";
+            }
 
-    msg.setTimestamp(System.currentTimeMillis());
-    msg.setSeenTime(0);
+            return "success";
 
-    catmRepo.save(msg);
-
-    return "sent";
-}
-
-// ================= MARK AS SEEN =================
-
-public void seenCatm(String from, String to) {
-
-    List<Catm> all = catmRepo.findAll();
-
-    for (Catm m : all) {
-
-        boolean match =
-                m.getFrom().equals(from)
-                && m.getTo().equals(to);
-
-        if (match) {
-
-            m.setStatus("seen");
-            m.setSeenTime(System.currentTimeMillis());
-
-            catmRepo.save(m);
-        }
-    }
-}
-
-// ================= GET CHAT =================
-
-public List<Catm> getMessages(
-String user1,
-String user2) {
-
-List<Catm> all = catmRepo.findAll();
-List<Catm> result = new ArrayList<>();
-
-long now = System.currentTimeMillis();
-long twentyFourHours = 24L * 60 * 60 * 1000;
-
-for (Catm m : all) {
-
-    // Auto delete temp messages after 24h
-    if (m.isTemp()) {
-
-        long age = now - m.getTimestamp();
-
-        if (age >= twentyFourHours) {
-            catmRepo.delete(m);
-            continue;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "server error: " + e.getMessage();
         }
     }
 
-    // Check conversation match
-    boolean match =
-            (m.getFrom().equals(user1)
-                    && m.getTo().equals(user2))
-            ||
-            (m.getFrom().equals(user2)
-                    && m.getTo().equals(user1));
+    // ================= SEND MESSAGE =================
+    public String sendMessage(String from,
+                              String to,
+                              String content,
+                              String imageUrl,
+                              String messageType) {
 
-    if (match) {
-
-        // Default type for old messages
-        if (m.getMessageType() == null) {
-            m.setMessageType("TEXT");
+        if (from == null || to == null) {
+            return "Invalid message";
         }
 
-        result.add(m);
-    }
-}
+        Catm msg = new Catm();
+        msg.setFrom(from);
+        msg.setTo(to);
+        msg.setContent(content);
+        msg.setImageUrl(imageUrl);
 
-return result;
+        if (messageType == null) {
+            messageType = "TEXT";
+        }
 
-}
+        msg.setMessageType(messageType);
+        msg.setStatus("sent");
+        msg.setTemp(true);
 
+        msg.setTimestamp(System.currentTimeMillis());
+        msg.setSeenTime(0);
 
-// ================= ALL USERS =================
+        catmRepo.save(msg);
 
-public List<String> getAllUsers() {
-
-    List<User> all = userRepo.findAll();
-
-    List<String> names = new ArrayList<>();
-
-    for (User u : all) {
-        names.add(u.getName());
-    }
-
-    return names;
-}
-
-// ================= IMAGE UPLOAD =================
-
-public String uploadImage(MultipartFile file)
-        throws IOException {
-
-    String uploadDir = "uploads";
-
-    Path uploadPath = Paths.get(uploadDir);
-
-    if (!Files.exists(uploadPath)) {
-        Files.createDirectories(uploadPath);
+        return "sent";
     }
 
-    String fileName =
-            System.currentTimeMillis()
-            + "_"
-            + file.getOriginalFilename();
+    // ================= MARK AS SEEN =================
+    public void seenCatm(String from, String to) {
 
-    Path filePath =
-            uploadPath.resolve(fileName);
+        List<Catm> all = catmRepo.findAll();
 
-    Files.copy(
-            file.getInputStream(),
-            filePath,
-            StandardCopyOption.REPLACE_EXISTING
-    );
+        for (Catm m : all) {
 
-    return "/uploads/" + fileName;
-}
+            boolean match =
+                    m.getFrom().equals(from) &&
+                    m.getTo().equals(to);
 
+            if (match) {
+                m.setStatus("seen");
+
+                if (m.isTemp()) {
+                    m.setSeenTime(System.currentTimeMillis());
+                }
+
+                catmRepo.save(m);
+            }
+        }
+    }
+
+    // ================= GET CHAT =================
+    public List<Catm> getMessages(String user1, String user2) {
+
+        List<Catm> all = catmRepo.findAll();
+        List<Catm> result = new ArrayList<>();
+
+        long now = System.currentTimeMillis();
+        long twentyFourHours = 24 * 60 * 60 * 1000;
+
+        for (Catm m : all) {
+
+            // delete temp messages older than 24h
+            if (m.isTemp()) {
+                long age = now - m.getTimestamp();
+
+                if (age >= twentyFourHours) {
+                    catmRepo.delete(m);
+                    continue;
+                }
+            }
+
+            boolean match =
+                    (m.getFrom().equals(user1) && m.getTo().equals(user2)) ||
+                    (m.getFrom().equals(user2) && m.getTo().equals(user1));
+
+            if (match) {
+                result.add(m);
+            }
+        }
+
+        return result;
+    }
+
+    // ================= ALL USERS =================
+    public List<String> getAllUsers() {
+
+        List<User> all = userRepo.findAll();
+        List<String> names = new ArrayList<>();
+
+        for (User u : all) {
+            names.add(u.getName());
+        }
+
+        return names;
+    }
 }
