@@ -1,14 +1,17 @@
 const API_BASE =
-    "https://phantom-backend05-1.onrender.com";
+"https://phantom-backend05-1.onrender.com";
 
 /* =========================
    USER
 ========================= */
 
-let me = localStorage.getItem("user");
+const me =
+localStorage.getItem("user");
 
 if (!me) {
-    window.location.href = "login.html";
+
+    window.location.href =
+    "login.html";
 }
 
 /* =========================
@@ -23,30 +26,130 @@ let connected = false;
 
 let typingTimeout = null;
 
-let renderedMessages = new Set();
+let onlineUsers = [];
 
-/* =========================
-   START APP
-========================= */
+let selectedMessage = null;
+let replyingTo = null;
 
-window.onload = () => {
+const renderedMessages =
+new Set();
+let messageSubscription = null;
+let typingSubscription = null;
 
-    let meBox =
-        document.getElementById("me");
 
-    if (meBox) {
-        meBox.innerText =
-            "Logged as: " + me;
+function getAvatar(user) {
+
+    const emojiRegex =
+    /\p{Extended_Pictographic}/u;
+
+    const chars =
+    [...user.trim()];
+
+    if (
+        chars.length &&
+        emojiRegex.test(chars[0])
+    ) {
+        return chars[0];
     }
 
-    fetch(API_BASE + "/users")
-    .then(() => {
+    return chars[0]
+        ?.toUpperCase() || "?";
+}
 
-        connectSocket();
+/* =========================
+   START
+========================= */
 
-        loadUsers();
-    });
+window.onload = async () => {
+
+    const meBox =
+    document.getElementById(
+        "me"
+    );
+
+    if (meBox) {
+
+        meBox.innerText =
+        "Logged as: " + me;
+    }
+
+    await setOnline();
+
+    connectSocket();
+
+    await loadOnlineUsers();
+
+    await loadUsers();
+
+    setupInputEvents();
 };
+
+/* =========================
+   ONLINE
+========================= */
+
+async function setOnline() {
+
+    try {
+
+        await fetch(
+
+            API_BASE +
+            "/online?user=" + me,
+
+            {
+                method:"POST"
+            }
+        );
+
+    } catch(e){}
+}
+
+function setOffline() {
+
+    navigator.sendBeacon(
+
+        API_BASE +
+        "/offline?user=" + me
+    );
+}
+
+window.addEventListener(
+
+    "beforeunload",
+
+    () => {
+
+        setOffline();
+    }
+);
+
+/* =========================
+   VISIBILITY
+========================= */
+
+document.addEventListener(
+
+    "visibilitychange",
+
+    async () => {
+
+        if (document.hidden) {
+
+            setOffline();
+
+        } else {
+
+            await setOnline();
+
+            await loadOnlineUsers();
+
+            await loadUsers();
+
+            updateChatStatus();
+        }
+    }
+);
 
 /* =========================
    SOCKET
@@ -54,256 +157,312 @@ window.onload = () => {
 
 function connectSocket() {
 
-    try {
+    const socket =
 
-        console.log("CONNECTING SOCKET...");
-
-       const socket =
     new SockJS(
-        API_BASE + "/chat/"
+        API_BASE + "/chat"
     );
 
-        stompClient =
-            Stomp.over(socket);
+    stompClient =
+    Stomp.over(socket);
 
-        stompClient.debug = null;
+    stompClient.debug = null;
 
-        stompClient.connect(
-            {},
-            function () {
+    stompClient.connect(
 
-                connected = true;
+        {},
 
-                console.log(
-                    "SOCKET CONNECTED"
-                );
+        () => {
 
-                /* RECEIVE MESSAGE */
+            connected = true;
 
-                stompClient.subscribe(
-                    "/topic/messages",
-                    function (msg) {
+            console.log(
+                "Socket Connected"
+            );
 
-                        let m =
-                            JSON.parse(msg.body);
+            subscribeMessages();
 
-                        let key =
-                            m.id ||
-                            `${m.from}_${m.to}_${m.content}_${m.timestamp}`;
+            subscribeTyping();
+        },
 
-                        if (
-                            renderedMessages.has(key)
-                        ) {
-                            return;
-                        }
+        () => {
 
-                        renderedMessages.add(key);
+            connected = false;
 
-                        if (
-                            (m.from === me &&
-                             m.to === selectedUser)
-                            ||
-                            (m.from === selectedUser &&
-                             m.to === me)
-                        ) {
+            console.log(
+                "Socket Disconnected"
+            );
 
-                            renderMessage(m);
-                        }
-                    }
-                );
+            setTimeout(() => {
 
-                /* TYPING */
+                connectSocket();
 
-                stompClient.subscribe(
-                    "/topic/typing",
-                    function (msg) {
-
-                        let data =
-                            JSON.parse(msg.body);
-
-                        let typingBox =
-                            document.getElementById("typing");
-
-                        if (
-                            typingBox &&
-                            data.from === selectedUser &&
-                            data.to === me
-                        ) {
-
-                            typingBox.innerText =
-                                data.isTyping
-                                ? "typing..."
-                                : "";
-                        }
-                    }
-                );
-            },
-
-            function (error) {
-
-                connected = false;
-
-                console.log(
-                    "SOCKET FAILED:",
-                    error
-                );
-
-                /* AUTO RETRY */
-
-                setTimeout(() => {
-
-                    connectSocket();
-
-                }, 3000);
-            }
-        );
-
-    } catch (e) {
-
-        console.log(
-            "SOCKET ERROR:",
-            e
-        );
-
-        setTimeout(() => {
-
-            connectSocket();
-
-        }, 3000);
-    }
+            },3000);
+        }
+    );
 }
 
-      
 /* =========================
-   LOAD USERS
+   RECEIVE MESSAGE
 ========================= */
+
+
+function subscribeMessages() {
+
+    if (messageSubscription) {
+        messageSubscription.unsubscribe();
+    }
+
+    messageSubscription = stompClient.subscribe(
+
+        "/topic/messages",
+
+        (msg) => {
+
+            const m =
+            JSON.parse(msg.body);
+
+            /* MY MESSAGE ALREADY SHOWN IN send() */
+
+            if (m.from === me) {
+                return;
+            }
+
+            /* ONLY SHOW CURRENT CHAT */
+
+            if (
+                m.from !== selectedUser ||
+                m.to !== me
+            ) {
+                return;
+            }
+
+            const key =
+                m.id ||
+                `${m.from}_${m.content}_${m.timestamp}`;
+
+            if (
+                renderedMessages.has(key)
+            ) {
+                return;
+            }
+
+            renderedMessages.add(key);
+
+            renderMessage(m);
+
+            smoothScrollBottom();
+        }
+    );
+}
+
+
+
+/* =========================
+   TYPING
+========================= */
+
+function subscribeTyping() {
+
+    if (typingSubscription) {
+        typingSubscription.unsubscribe();
+    }
+
+    typingSubscription = stompClient.subscribe(
+
+        "/topic/typing",
+
+        (msg) => {
+
+            const data =
+            JSON.parse(msg.body);
+
+            const typingBox =
+            document.getElementById(
+                "typing"
+            );
+
+            if (!typingBox)
+                return;
+
+            if (
+                data.from === selectedUser &&
+                data.to === me
+            ) {
+
+                typingBox.innerText =
+                    data.isTyping
+                    ? "typing..."
+                    : "";
+            }
+        }
+    );
+}
+/* =========================
+   USERS
+========================= */
+
+async function loadOnlineUsers() {
+
+    try {
+
+        const res =
+
+        await fetch(
+            API_BASE +
+            "/online-users"
+        );
+
+        onlineUsers =
+        await res.json();
+
+    } catch(e){}
+}
 
 async function loadUsers() {
 
     try {
 
-        let response =
-            await fetch(
-                API_BASE + "/users"
-            );
+        const res =
 
-        let users =
-            await response.json();
+        await fetch(
+            API_BASE + "/users"
+        );
 
-        console.log("USERS:", users);
+        const users =
+        await res.json();
 
-        let box =
-            document.getElementById("users");
+        const box =
 
-        if (!box) return;
+        document.getElementById(
+            "users"
+        );
+
+        if (!box)
+            return;
 
         box.innerHTML = "";
 
-        users.forEach(username => {
+        users.forEach(user => {
 
-            if (username === me) return;
+            if (user === me)
+                return;
 
-            let div =
-                document.createElement("div");
+            const online =
 
-            div.className = "user";
+            onlineUsers.includes(
+                user
+            );
 
-            div.style.cursor = "pointer";
+            const div =
+            document.createElement(
+                "div"
+            );
 
-           div.innerHTML = `
-
-    <div style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        width:100%;
-    ">
-
-        <div>
-            <b>${username}</b>
-
-            <div style="
-                font-size:12px;
-                color:#4ade80;
-                margin-top:4px;
-            ">
-                online
-            </div>
-        </div>
-
-        <div style="
-            width:10px;
-            height:10px;
-            border-radius:50%;
-            background:#4ade80;
-            box-shadow:0 0 10px #4ade80;
-        "></div>
-
-    </div>
-`;
-
-            /* IMPORTANT */
+            div.className =
+            "user";
 
             div.onclick = () => {
-                openChat(username);
+
+                openChat(user);
             };
+
+            div.innerHTML = `
+
+                <div class="userRow">
+
+                    <div class="snapAvatar">
+
+                        ${
+    online
+    ? "💀"
+    : getAvatar(user)
+                        }
+
+                    </div>
+
+                    <div>
+
+                        <div class="userName">
+                            ${user}
+                        </div>
+
+                        <div class="userStatus"
+                        style="
+                            color:
+                            ${
+                                online
+                                ? "#4ade80"
+                                : "#888"
+                            };
+                        ">
+
+                            ${
+                                online
+                                ? "online"
+                                : "offline"
+                            }
+
+                        </div>
+
+                    </div>
+
+                </div>
+            `;
 
             box.appendChild(div);
         });
 
-    } catch (e) {
-
-        console.log(
-            "LOAD USERS ERROR:",
-            e
-        );
-    }
+    } catch(e){}
 }
 
 /* =========================
    OPEN CHAT
 ========================= */
 
-function openChat(username) {
+async function openChat(user) {
 
-    console.log(
-        "OPEN CHAT:",
-        username
-    );
+    selectedUser = user;
 
-    selectedUser = username;
+    renderedMessages.clear();
 
-    let chatWith =
-        document.getElementById("chatWith");
+    document.getElementById(
+        "chatWith"
+    ).innerText = user;
 
-    if (chatWith) {
-        chatWith.innerText = username;
-    }
+    document.getElementById(
+        "avatarBox"
+    ).innerText = "💀";
 
-    let avatar =
-        document.getElementById("avatarBox");
+    document.getElementById(
+        "messages"
+    ).innerHTML = "";
 
-    if (avatar) {
+    updateChatStatus();
 
-        avatar.innerText =
-            username.charAt(0)
-            .toUpperCase();
-    }
+    await loadMessages();
 
-    let chat =
-        document.querySelector(".chat");
+    if (
+        window.innerWidth <= 700
+    ) {
 
-    if (chat) {
-        chat.classList.add("active");
-    }
+        document.querySelector(
+            ".sidebar"
+        ).style.display =
+        "none";
 
-    loadMessages();
+        const chat =
 
-    let msgInput =
-        document.getElementById("msg");
+        document.querySelector(
+            ".chat"
+        );
 
-    if (msgInput) {
-        msgInput.focus();
+        chat.style.display =
+        "flex";
+
+        chat.classList.add(
+            "active"
+        );
     }
 }
 
@@ -313,45 +472,93 @@ function openChat(username) {
 
 function closeChat() {
 
-    let chat =
-        document.querySelector(".chat");
+    if (
+        window.innerWidth <= 700
+    ) {
 
-    if (chat) {
-        chat.classList.remove("active");
+        document.querySelector(
+            ".chat"
+        ).style.display =
+        "none";
+
+        document.querySelector(
+            ".sidebar"
+        ).style.display =
+        "block";
     }
 }
 
 /* =========================
-   SEND MESSAGE
+   STATUS
 ========================= */
 
+
+function updateChatStatus() {
+
+    if (!selectedUser)
+        return;
+
+    const online =
+    onlineUsers.includes(
+        selectedUser
+    );
+
+    const statusBox =
+    document.getElementById(
+        "chatStatus"
+    );
+
+    const avatarBox =
+    document.getElementById(
+        "avatarBox"
+    );
+
+    statusBox.innerText =
+        online
+        ? "online"
+        : "offline";
+
+    statusBox.style.color =
+        online
+        ? "#4ade80"
+        : "#888";
+
+    avatarBox.innerText =
+        online
+        ? "💀"
+        : getAvatar(selectedUser);
+
+}
+
+
+/* =========================
+   SEND
+========================= */
 function send() {
 
-    let input =
+    const input =
         document.getElementById("msg");
 
     if (!input) return;
 
-    let content =
+    const content =
         input.value.trim();
 
     if (!content) return;
 
     if (!selectedUser) {
 
-        alert("Select user");
-
+        alert("Select a user first");
         return;
     }
 
     if (!connected || !stompClient) {
 
         alert("Socket not connected");
-
         return;
     }
 
-    let msg = {
+    const msg = {
 
         id: crypto.randomUUID(),
 
@@ -361,63 +568,71 @@ function send() {
 
         content: content,
 
+        replyTo:
+            replyingTo
+                ? replyingTo.content
+                : null,
+
         timestamp: Date.now()
     };
 
-    stompClient.send(
-        "/app/send",
-        {},
-        JSON.stringify(msg)
-    );
+    // Prevent duplicate rendering
+    renderedMessages.add(msg.id);
 
+    // Show instantly in UI
+    renderMessage(msg);
+
+    smoothScrollBottom();
+
+    try {
+
+        stompClient.send(
+            "/app/send",
+            {},
+            JSON.stringify(msg)
+        );
+
+    } catch (e) {
+
+        console.error(
+            "Send Error:",
+            e
+        );
+
+        return;
+    }
+
+    // Clear input
     input.value = "";
 
+    // Stop typing indicator
     sendTyping(false);
+
+    // Clear typing timer
+    clearTimeout(typingTimeout);
+
+    // Reset reply state
+    replyingTo = null;
+
+    const replyBox =
+        document.getElementById("replyBox");
+
+    if (replyBox) {
+
+        replyBox.style.display =
+            "none";
+    }
+
+    const replyText =
+        document.getElementById("replyText");
+
+    if (replyText) {
+
+        replyText.innerText = "";
+    }
 }
 
-/* =========================
-   INPUT EVENTS
-========================= */
 
-document.addEventListener(
-    "DOMContentLoaded",
-    () => {
-
-        let msgInput =
-            document.getElementById("msg");
-
-        if (!msgInput) return;
-
-        msgInput.addEventListener(
-            "keypress",
-            (e) => {
-
-                if (e.key === "Enter") {
-                    send();
-                }
-            }
-        );
-
-        msgInput.addEventListener(
-            "input",
-            () => {
-
-                sendTyping(true);
-
-                clearTimeout(
-                    typingTimeout
-                );
-
-                typingTimeout =
-                    setTimeout(() => {
-
-                        sendTyping(false);
-
-                    }, 1000);
-            }
-        );
-    }
-);
 
 /* =========================
    SEND TYPING
@@ -425,14 +640,19 @@ document.addEventListener(
 
 function sendTyping(status) {
 
-    if (!selectedUser) return;
-
-    if (!connected || !stompClient)
+    if (
+        !selectedUser ||
+        !connected
+    ) {
         return;
+    }
 
     stompClient.send(
+
         "/app/typing",
+
         {},
+
         JSON.stringify({
 
             from: me,
@@ -445,107 +665,378 @@ function sendTyping(status) {
 }
 
 /* =========================
+   INPUT EVENTS
+========================= */
+
+function setupInputEvents() {
+
+    const input =
+
+    document.getElementById(
+        "msg"
+    );
+
+    if (!input)
+        return;
+
+    input.addEventListener(
+
+        "keypress",
+
+        (e) => {
+
+            if (
+                e.key === "Enter"
+            ) {
+
+                send();
+            }
+        }
+    );
+
+    input.addEventListener(
+
+        "input",
+
+        () => {
+
+            sendTyping(true);
+
+            clearTimeout(
+                typingTimeout
+            );
+
+            typingTimeout =
+
+            setTimeout(() => {
+
+                sendTyping(false);
+
+            },1000);
+        }
+    );
+}
+
+/* =========================
    LOAD MESSAGES
 ========================= */
 
 async function loadMessages() {
 
-    if (!selectedUser) return;
-
     try {
 
-        let response =
-            await fetch(
-                `${API_BASE}/messages?user1=${me}&user2=${selectedUser}`
-            );
+        const res = await fetch(
 
-        let data =
-            await response.json();
+            `${API_BASE}/messages?user1=${me}&user2=${selectedUser}`
+        );
 
-        let box =
-            document.getElementById("messages");
-
-        if (!box) return;
-
-        box.innerHTML = "";
-
-        renderedMessages.clear();
+        const data =
+        await res.json();
 
         data.forEach(m => {
 
-            let key =
+            const key =
+
                 m.id ||
-                `${m.from}_${m.to}_${m.content}_${m.timestamp}`;
+
+                `${m.from}_${m.content}_${m.timestamp}`;
+
+            if (
+                renderedMessages.has(key)
+            ) {
+                return;
+            }
 
             renderedMessages.add(key);
 
             renderMessage(m);
         });
 
-    } catch (e) {
+        smoothScrollBottom();
+
+    } catch(e){
 
         console.log(
-            "LOAD MESSAGE ERROR:",
+            "Load message error",
             e
         );
     }
 }
 
 /* =========================
-   RENDER MESSAGE
+   RENDER
 ========================= */
 
 function renderMessage(m) {
 
-    let box =
+    const box =
         document.getElementById("messages");
 
     if (!box) return;
 
-    let mine =
-        m.from === me;
+    const key =
+        m.id ||
+        `${m.from}_${m.content}_${m.timestamp}`;
+
+    if (document.getElementById("msg_" + key)) {
+        return;
+    }
+
+    const mine = m.from === me;
+
+    const div = document.createElement("div");
+
+    div.id = "msg_" + key;
+
+    div.dataset.id = m.id;
+
+    div.className =
+        mine ? "myMsg" : "otherMsg";
 
     let time = "";
 
     if (m.timestamp) {
 
-        let d =
-            new Date(m.timestamp);
+        const d = new Date(m.timestamp);
 
         time =
             d.getHours() +
             ":" +
-            String(d.getMinutes())
-            .padStart(2, "0");
+            String(
+                d.getMinutes()
+            ).padStart(2, "0");
     }
 
-    box.innerHTML += `
+    div.innerHTML = `
 
-        <div class="${
-            mine
-            ? "myMsg"
-            : "otherMsg"
-        }">
+    ${
+        m.replyTo
+        ?
+        `<div style="
+            background:rgba(255,255,255,.08);
+            padding:8px;
+            border-radius:10px;
+            margin-bottom:8px;
+            color:#d8b4fe;
+            font-size:12px;
+        ">
+            ${m.replyTo}
+        </div>`
+        : ""
+    }
 
-            <div>${m.content}</div>
+    ${
+        m.messageType === "IMAGE"
+        ?
+        `<img
+            src="${API_BASE}${m.imageUrl}"
+            class="chatImage"
+        >`
+        :
+        `<div>${m.content}</div>`
+    }
 
-            <div class="msgTime">
-                ${time}
-            </div>
+    <div class="msgTime">
+        ${time}
+    </div>
+`;
 
-        </div>
-    `;
+    div.addEventListener(
+        "dblclick",
+        (e) => {
 
-    box.scrollTop =
+            selectedMessage = m;
+
+            const bar =
+                document.getElementById(
+                    "actionBar"
+                );
+
+            bar.style.display = "block";
+
+            bar.style.left =
+                Math.min(
+                    e.pageX,
+                    window.innerWidth - 240
+                ) + "px";
+
+            bar.style.top =
+                Math.min(
+                    e.pageY,
+                    window.innerHeight - 220
+                ) + "px";
+        }
+    );
+
+    box.appendChild(div);
+}
+
+
+/* =========================
+   SCROLL
+========================= */
+
+function smoothScrollBottom() {
+
+    const box =
+
+    document.getElementById(
+        "messages"
+    );
+
+    if (!box)
+        return;
+
+    setTimeout(() => {
+
+        box.scrollTop =
         box.scrollHeight;
+
+    },50);
 }
 
 /* =========================
-   AUTO REFRESH USERS
+   AUTO REFRESH
 ========================= */
 
-setInterval(() => {
+setInterval(
 
-    loadUsers();
+    async () => {
 
-}, 5000);
+        if (!document.hidden) {
+
+            await loadOnlineUsers();
+
+            await loadUsers();
+
+            updateChatStatus();
+        }
+
+    },
+
+    3000
+);   
+
+document.addEventListener(
+    "click",
+    (e) => {
+
+        if (
+            !e.target.closest(
+                "#actionBar"
+            )
+        ) {
+
+            document.getElementById(
+                "actionBar"
+            ).style.display = "none";
+        }
+    }
+);
+
+function replyMessage() {
+
+    if (!selectedMessage)
+        return;
+
+    replyingTo = selectedMessage;
+
+    document.getElementById(
+        "replyBox"
+    ).style.display = "block";
+
+    document.getElementById(
+        "replyText"
+    ).innerText =
+        selectedMessage.content;
+
+    document.getElementById(
+        "actionBar"
+    ).style.display = "none";
+}
+
+function cancelReply() {
+
+    replyingTo = null;
+
+    document.getElementById(
+        "replyBox"
+    ).style.display = "none";
+}
+function reactMessage(emoji) {
+
+    if (!selectedMessage)
+        return;
+
+    const msgElement =
+        document.querySelector(
+            `[data-id="${selectedMessage.id}"]`
+        );
+
+    if (!msgElement)
+        return;
+
+    let oldReaction =
+        msgElement.querySelector(
+            ".reaction"
+        );
+
+    if (oldReaction) {
+        oldReaction.remove();
+    }
+
+    const reaction =
+        document.createElement("div");
+
+    reaction.className =
+        "reaction";
+
+    reaction.innerHTML = emoji;
+
+    msgElement.appendChild(
+        reaction
+    );
+
+    document.getElementById(
+        "actionBar"
+    ).style.display = "none";
+}
+
+document
+.getElementById("imageInput")
+.addEventListener(
+    "change",
+    async (e) => {
+
+        const file = e.target.files[0];
+
+        if (!file) return;
+
+        const formData = new FormData();
+
+        formData.append("file", file);
+
+        const res = await fetch(
+            API_BASE + "/upload",
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        const imageUrl = await res.text();
+
+        stompClient.send(
+            "/app/send",
+            {},
+            JSON.stringify({
+                id: crypto.randomUUID(),
+                from: me,
+                to: selectedUser,
+                imageUrl: imageUrl,
+                messageType: "IMAGE",
+                timestamp: Date.now()
+            })
+        );
+    }
+);

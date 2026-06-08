@@ -1,365 +1,220 @@
+<! -- const API_BASE = "https://phantom-backend05.onrender.com";
 
-<!DOCTYPE html>
-<html lang="en">
+let me = localStorage.getItem("user");
+let selectedUser = "";
 
-<head>
+let stompClient = null;
+let connected = false;
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+let messageSet = new Set();
+let typingTimeout = null;
 
-<title> 👻 PHANTOM</title>
+/* ================= LOGIN CHECK ================= */
 
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-
-<style>
-
-/* ======================
-   GLOBAL
-====================== */
-
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
+if (!me) {
+    window.location.href = "login.html";
 }
 
-body{
-    height:100vh;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    overflow:hidden;
+document.getElementById("me").innerText = "Logged as: " + me;
 
-    font-family:'Poppins',sans-serif;
+/* ================= SOCKET ================= */
 
-    background:
-    radial-gradient(circle at top left,#31104d,#050505 45%),
-    radial-gradient(circle at bottom right,#4b0d74,#000000 45%);
-}
+function connectSocket() {
 
-/* ======================
-   BACKGROUND GLOW
-====================== */
+    if (connected) return;
 
-.bg{
-    position:absolute;
-    width:100%;
-    height:100%;
+    let socket = new SockJS(API_BASE + "/chat");
+    stompClient = Stomp.over(socket);
 
-    background:
-    radial-gradient(circle at center,
-    rgba(168,85,247,0.15),
-    transparent 60%);
+    stompClient.connect({}, () => {
 
-    filter:blur(10px);
-}
+        connected = true;
 
-/* ======================
-   LOGIN BOX
-====================== */
+        stompClient.subscribe("/topic/messages", (msg) => {
 
-.box{
-    position:relative;
+            let m = JSON.parse(msg.body);
 
-    width:360px;
+            let key = m.from + m.to + m.content + (m.timestamp || "");
 
-    padding:40px;
+            if (messageSet.has(key)) return;
+            messageSet.add(key);
 
-    border-radius:28px;
-
-    background:
-    rgba(15,15,25,0.82);
-
-    border:1px solid rgba(192,132,252,0.18);
-
-    backdrop-filter:blur(25px);
-
-    box-shadow:
-    0 0 35px rgba(168,85,247,0.14);
-
-    z-index:10;
-}
-
-/* ======================
-   LOGO
-====================== */
-
-h1{
-    text-align:center;
-
-    color:#d8b4fe;
-
-    font-size:34px;
-
-    letter-spacing:3px;
-
-    margin-bottom:8px;
-
-    text-shadow:
-    0 0 18px rgba(168,85,247,0.5);
-}
-
-/* ======================
-   SUBTITLE
-====================== */
-
-.sub{
-    text-align:center;
-
-    color:#b9b9b9;
-
-    font-size:14px;
-
-    margin-bottom:30px;
-}
-
-/* ======================
-   INPUTS
-====================== */
-
-.inputBox{
-    margin-top:18px;
-}
-
-.inputBox label{
-    color:#d9d9d9;
-    font-size:14px;
-}
-
-input{
-    width:100%;
-
-    padding:15px;
-
-    margin-top:10px;
-
-    background:#1c1528;
-
-    border:none;
-
-    border-radius:16px;
-
-    color:white;
-
-    font-size:15px;
-
-    outline:none;
-
-    border:1px solid rgba(255,255,255,0.05);
-
-    transition:0.3s;
-}
-
-input:focus{
-
-    border:1px solid rgba(192,132,252,0.45);
-
-    box-shadow:
-    0 0 18px rgba(168,85,247,0.18);
-}
-
-/* ======================
-   BUTTON
-====================== */
-
-button{
-
-    width:100%;
-
-    padding:15px;
-
-    margin-top:25px;
-
-    border:none;
-
-    border-radius:18px;
-
-    background:
-    linear-gradient(
-        135deg,
-        #a855f7,
-        #7c3aed
-    );
-
-    color:white;
-
-    font-size:16px;
-
-    font-weight:600;
-
-    cursor:pointer;
-
-    transition:0.3s;
-
-    box-shadow:
-    0 0 22px rgba(168,85,247,0.22);
-}
-
-button:hover{
-
-    transform:translateY(-2px);
-
-    box-shadow:
-    0 0 30px rgba(168,85,247,0.30);
-}
-
-/* ======================
-   TEXT
-====================== */
-
-p{
-    color:#bcbcbc;
-
-    text-align:center;
-
-    margin-top:20px;
-
-    font-size:14px;
-}
-
-a{
-    color:#d8b4fe;
-
-    text-decoration:none;
-
-    font-weight:500;
-}
-
-a:hover{
-    text-decoration:underline;
-}
-
-/* ======================
-   MOBILE
-====================== */
-
-@media(max-width:700px){
-
-    .box{
-        width:92%;
-        padding:32px 24px;
-    }
-
-    body{
-        padding:15px;
-    }
-
-    h1{
-        font-size:28px;
-    }
-}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="bg"></div>
-
-<div class="box">
-
-    <h1> 👻 PHANTOM</h1>
-
-    <div class="sub">
-        Secure Real-Time Catm
-    </div>
-
-    <!-- USERNAME -->
-
-    <div class="inputBox">
-
-        <label>Username</label>
-
-        <input
-            type="text"
-            id="name"
-            placeholder="Enter username"
-            autocomplete="off"
-        >
-
-    </div>
-
-    <!-- PASSWORD -->
-
-    <div class="inputBox">
-
-        <label>Password</label>
-
-        <input
-            type="password"
-            id="password"
-            placeholder="Enter password"
-        >
-
-    </div>
-
-    <!-- BUTTON -->
-
-    <button onclick="login()">
-        LOGIN
-    </button>
-
-    <!-- REGISTER -->
-
-    <p>
-        No account?
-        <a href="register.html">
-            Register
-        </a>
-    </p>
-
-</div>
-
-<script>
-const API_BASE = "https://phantom-backend05.onrender.com";
-
-async function login() {
-
-    let name = document.getElementById("name").value.trim();
-    let password = document.getElementById("password").value.trim();
-
-    if (!name || !password) {
-        alert("Fill all fields");
-        return;
-    }
-
-    try {
-
-        let res = await fetch(`${API_BASE}/login`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                name: name,
-                password: password
-            })
+            if (
+                (m.from === me && m.to === selectedUser) ||
+                (m.from === selectedUser && m.to === me)
+            ) {
+                renderMessage(m);
+            }
         });
 
-        let text = await res.text();
-        console.log("LOGIN RESPONSE:", text);
+        stompClient.subscribe("/topic/typing", (msg) => {
 
-        if (text === "success") {
+            let data = JSON.parse(msg.body);
 
-            localStorage.setItem("user", name);
+            let box = document.getElementById("typing");
 
-            // IMPORTANT: correct redirect path
-            window.location.href = "Catm.html";
+            if (box && data.from === selectedUser && data.to === me) {
+                box.innerText = data.isTyping ? "typing..." : "";
+            }
+        });
 
-        } else {
-            alert("Invalid login: " + text);
-        }
-
-    } catch (err) {
-        console.log(err);
-        alert("Backend not responding");
-    }
+        loadUsers();
+    });
 }
-</script>
 
-</body>
-</html>
+connectSocket();
 
+/* ================= USERS ================= */
 
+async function loadUsers() {
+
+    let users = await (await fetch(API_BASE + "/users")).json();
+
+    let box = document.getElementById("users");
+    box.innerHTML = "";
+
+    users.forEach(u => {
+
+        if (u !== me) {
+
+            let first = u.charAt(0).toUpperCase();
+
+            box.innerHTML += `
+                <div class="user" onclick="openChat('${u}')">
+                    <div>
+                        <b>${u}</b>
+                    </div>
+                    <div style="
+                        width:28px;
+                        height:28px;
+                        border-radius:50%;
+                        background:#a855f7;
+                        display:flex;
+                        justify-content:center;
+                        align-items:center;
+                        font-size:12px;
+                    ">
+                        ${first}
+                    </div>
+                </div>
+            `;
+        }
+    });
+}
+
+/* ================= OPEN CHAT ================= */
+
+function openChat(u) {
+
+    selectedUser = u;
+
+    document.getElementById("chatWith").innerText = u;
+
+    document.querySelector(".chat").classList.add("active");
+
+    loadMessages();
+
+    document.getElementById("msg").focus();
+}
+
+/* ================= CLOSE CHAT ================= */
+
+function closeChat() {
+    document.querySelector(".chat").classList.remove("active");
+}
+
+/* ================= SEND ================= */
+
+function send() {
+
+    let input = document.getElementById("msg");
+    let content = input.value.trim();
+
+    if (!content || !selectedUser) return;
+
+    stompClient.send("/app/send", {}, JSON.stringify({
+        from: me,
+        to: selectedUser,
+        content: content,
+        timestamp: Date.now()
+    }));
+
+    input.value = "";
+    sendTyping(false);
+}
+
+/* ENTER SEND */
+document.getElementById("msg").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") send();
+});
+
+/* ================= TYPING ================= */
+
+document.getElementById("msg").addEventListener("input", () => {
+
+    sendTyping(true);
+
+    clearTimeout(typingTimeout);
+
+    typingTimeout = setTimeout(() => {
+        sendTyping(false);
+    }, 1000);
+});
+
+function sendTyping(status) {
+
+    if (!selectedUser) return;
+
+    stompClient.send("/app/typing", {}, JSON.stringify({
+        from: me,
+        to: selectedUser,
+        isTyping: status
+    }));
+}
+
+/* ================= MESSAGES ================= */
+
+async function loadMessages() {
+
+    if (!selectedUser) return;
+
+    let res = await fetch(
+        API_BASE + `/messages?user1=${me}&user2=${selectedUser}`
+    );
+
+    let data = await res.json();
+
+    let box = document.getElementById("messages");
+    box.innerHTML = "";
+
+    data.forEach(renderMessage);
+}
+
+/* ================= RENDER ================= */
+
+function renderMessage(m) {
+
+    let box = document.getElementById("messages");
+
+    let mine = m.from === me;
+
+    let time = "";
+
+    if (m.timestamp) {
+        let d = new Date(m.timestamp);
+        time = d.getHours() + ":" + d.getMinutes();
+    }
+
+    box.innerHTML += `
+        <div class="${mine ? 'myMsg' : 'otherMsg'}">
+            <div>${m.content}</div>
+            <div class="msgTime">${time}</div>
+        </div>
+    `;
+
+    box.scrollTop = box.scrollHeight;
+}
+
+/* ================= AUTO REFRESH ================= */
+
+setInterval(loadUsers, 4000);
