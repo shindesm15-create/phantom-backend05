@@ -10,27 +10,20 @@ import org.springframework.web.bind.annotation.*;
 @CrossOrigin("*")
 public class AuthController {
 
-    private final CatmService service;
+    private final UserService userService;
 
-    public AuthController(CatmService service) {
-        this.service = service;
+    public AuthController(UserService userService) {
+        this.userService = userService;
     }
 
-  
-@PostMapping("/login")
-public ResponseEntity<String> login(@RequestBody User user) {
-
-    String result = service.login(user.getName(), user.getPassword());
-
-    return ResponseEntity.ok(result);
-}
-   
+    @PostMapping("/login")
+    public ResponseEntity<String> login(@RequestBody User user) {
+        String result = userService.login(user.getName(), user.getPassword());
+        return ResponseEntity.ok(result);
+    }
 
     @PostMapping("/register")
     public String register(@RequestBody User user) {
-        return service.createUser(user.getName(), user.getPassword());
+        return userService.register(user.getName(), user.getPassword());
     }
-
-   
-    
 }

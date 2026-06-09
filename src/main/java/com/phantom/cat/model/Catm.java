@@ -18,7 +18,7 @@ public class Catm {
     // Text message
     private String content;
 
-    // Image URL
+    // Image URL (Cloudinary / Firebase)
     private String imageUrl;
 
     // TEXT, IMAGE, VIDEO, FILE, VOICE
@@ -27,11 +27,11 @@ public class Catm {
     // Reply message text
     private String reply;
 
-    // Temporary message
+    // Temporary message (auto delete logic)
     private boolean temp;
 
     // Typing indicator
-    private boolean isTyping;
+    private boolean typing;
 
     // Seen timestamp
     private long seenTime;
@@ -42,139 +42,47 @@ public class Catm {
     // SENT, DELIVERED, SEEN
     private String status;
 
-    // Users who saved the message
+    // Users who saved message
     private List<String> savedBy = new ArrayList<>();
 
-    public Catm() {
-    }
+    // ===== GETTERS & SETTERS =====
 
-    // ===== ID =====
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
-    public String getId() {
-        return id;
-    }
+    public String getFrom() { return from; }
+    public void setFrom(String from) { this.from = from; }
 
-    public void setId(String id) {
-        this.id = id;
-    }
+    public String getTo() { return to; }
+    public void setTo(String to) { this.to = to; }
 
-    // ===== FROM =====
+    public String getContent() { return content; }
+    public void setContent(String content) { this.content = content; }
 
-    public String getFrom() {
-        return from;
-    }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
 
-    public void setFrom(String from) {
-        this.from = from;
-    }
+    public String getMessageType() { return messageType; }
+    public void setMessageType(String messageType) { this.messageType = messageType; }
 
-    // ===== TO =====
+    public String getReply() { return reply; }
+    public void setReply(String reply) { this.reply = reply; }
 
-    public String getTo() {
-        return to;
-    }
+    public boolean isTemp() { return temp; }
+    public void setTemp(boolean temp) { this.temp = temp; }
 
-    public void setTo(String to) {
-        this.to = to;
-    }
+    public boolean isTyping() { return typing; }
+    public void setTyping(boolean typing) { this.typing = typing; }
 
-    // ===== CONTENT =====
+    public long getSeenTime() { return seenTime; }
+    public void setSeenTime(long seenTime) { this.seenTime = seenTime; }
 
-    public String getContent() {
-        return content;
-    }
+    public long getTimestamp() { return timestamp; }
+    public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
 
-    public void setContent(String content) {
-        this.content = content;
-    }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
-    // ===== IMAGE URL =====
-
-    public String getImageUrl() {
-        return imageUrl;
-    }
-
-    public void setImageUrl(String imageUrl) {
-        this.imageUrl = imageUrl;
-    }
-
-    // ===== MESSAGE TYPE =====
-
-    public String getMessageType() {
-        return messageType;
-    }
-
-    public void setMessageType(String messageType) {
-        this.messageType = messageType;
-    }
-
-    // ===== REPLY =====
-
-    public String getReply() {
-        return reply;
-    }
-
-    public void setReply(String reply) {
-        this.reply = reply;
-    }
-
-    // ===== TEMP =====
-
-    public boolean isTemp() {
-        return temp;
-    }
-
-    public void setTemp(boolean temp) {
-        this.temp = temp;
-    }
-
-    // ===== TYPING =====
-
-    public boolean isTyping() {
-        return isTyping;
-    }
-
-    public void setTyping(boolean typing) {
-        this.isTyping = typing;
-    }
-
-    // ===== SEEN TIME =====
-
-    public long getSeenTime() {
-        return seenTime;
-    }
-
-    public void setSeenTime(long seenTime) {
-        this.seenTime = seenTime;
-    }
-
-    // ===== TIMESTAMP =====
-
-    public long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(long timestamp) {
-        this.timestamp = timestamp;
-    }
-
-    // ===== STATUS =====
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    // ===== SAVED BY =====
-
-    public List<String> getSavedBy() {
-        return savedBy;
-    }
-
-    public void setSavedBy(List<String> savedBy) {
-        this.savedBy = savedBy;
-    }
+    public List<String> getSavedBy() { return savedBy; }
+    public void setSavedBy(List<String> savedBy) { this.savedBy = savedBy; }
 }
