@@ -1,41 +1,45 @@
 package com.phantom.cat.controller;
 
 import com.phantom.cat.model.Catm;
-import com.phantom.cat.service.ChatService;
-import com.phantom.cat.service.UserService;
-import org.springframework.web.bind.annotation.*;
+import com.phantom.cat.service.CatmService;
 
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 import java.util.List;
 
 @RestController
 public class CatmController {
 
-    private final ChatService chatService;
-    private final UserService userService;
+    private final CatmService service;
 
-    public CatmController(ChatService chatService,
-                          UserService userService) {
-        this.chatService = chatService;
-        this.userService = userService;
+    public CatmController(CatmService service) {
+        this.service = service;
     }
 
-    // GET CHAT
     @GetMapping("/messages")
     public List<Catm> getMessages(@RequestParam String user1,
                                   @RequestParam String user2) {
-        return chatService.getChat(user1, user2);
+        return service.getMessages(user1, user2);
     }
 
-    // USERS LIST
     @GetMapping("/users")
     public List<String> getUsers() {
-        return userService.getAllUsers();
+        return service.getAllUsers();
     }
 
-    // MARK AS SEEN
     @PostMapping("/seen")
     public void seen(@RequestParam String from,
                      @RequestParam String to) {
-        chatService.markSeen(from, to);
+        service.seenCatm(from, to);
     }
+
+    // IMAGE UPLOAD
+   @PostMapping("/upload")
+public String uploadImage(@RequestParam("file") MultipartFile file)
+        throws IOException {
+
+    return service.uploadImage(file);
+}
 }
