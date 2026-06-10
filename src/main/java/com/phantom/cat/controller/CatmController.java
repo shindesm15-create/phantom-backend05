@@ -44,6 +44,19 @@ public class CatmController {
         service.seenCatm(from, to);
     }
 
+    @PostMapping("/api/send")
+public Catm send(@RequestBody Catm msg) {
+
+    msg.setTimestamp(System.currentTimeMillis());
+    msg.setStatus("sent");
+
+    Catm saved = catmRepo.save(msg);
+
+    messagingTemplate.convertAndSend("/topic/messages", saved);
+
+    return saved;
+}
+
     // IMAGE UPLOAD
     @PostMapping("/upload")
     public String uploadImage(
