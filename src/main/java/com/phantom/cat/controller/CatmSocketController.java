@@ -23,6 +23,11 @@ public CatmSocketController(CatmService service) {
 @SendTo("/topic/messages")
 public Catm send(Catm message) {
 
+    System.out.println("===== RECEIVED =====");
+    System.out.println("content = " + message.getContent());
+    System.out.println("imageUrl = " + message.getImageUrl());
+    System.out.println("messageType = " + message.getMessageType());
+
     service.sendMessage(
             message.getFrom(),
             message.getTo(),
@@ -31,12 +36,8 @@ public Catm send(Catm message) {
             message.getMessageType()
     );
 
-    message.setStatus("sent");
-    message.setTimestamp(System.currentTimeMillis());
-
     return message;
 }
-
 // ================= TYPING =================
 
 @MessageMapping("/typing")
